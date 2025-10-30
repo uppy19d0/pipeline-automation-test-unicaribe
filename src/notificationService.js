@@ -1,20 +1,20 @@
 const nodemailer = require('nodemailer');
 const axios = require('axios');
 const fs = require('fs');
-const path = require('path');
+// const path = require('path'); // <- removido: no usado
 
 class NotificationService {
   constructor() {
     this.emailConfig = {
       host: process.env.SMTP_HOST || 'smtp.gmail.com',
-      port: process.env.SMTP_PORT || 587,
-      secure: false,
+      port: Number(process.env.SMTP_PORT || 587),
+      secure: (process.env.SMTP_SECURE === 'true') || Number(process.env.SMTP_PORT) === 465,
       auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS
       }
     };
-    
+
     this.slackWebhookUrl = process.env.SLACK_WEBHOOK_URL;
     this.teamsWebhookUrl = process.env.TEAMS_WEBHOOK_URL;
     this.discordWebhookUrl = process.env.DISCORD_WEBHOOK_URL;
@@ -22,64 +22,52 @@ class NotificationService {
 
   async sendNotifications(reportData, reportPaths = {}) {
     const notifications = [];
-    
     try {
-      // Send email notification if configured
       if (this.emailConfig.auth.user && this.emailConfig.auth.pass) {
         const emailResult = await this.sendEmailNotification(reportData, reportPaths);
         notifications.push({ type: 'email', success: true, result: emailResult });
       }
-      
-      // Send Slack notification if configured
       if (this.slackWebhookUrl) {
         const slackResult = await this.sendSlackNotification(reportData);
         notifications.push({ type: 'slack', success: true, result: slackResult });
       }
-      
-      // Send Teams notification if configured
       if (this.teamsWebhookUrl) {
         const teamsResult = await this.sendTeamsNotification(reportData);
         notifications.push({ type: 'teams', success: true, result: teamsResult });
       }
-      
-      // Send Discord notification if configured
       if (this.discordWebhookUrl) {
         const discordResult = await this.sendDiscordNotification(reportData);
         notifications.push({ type: 'discord', success: true, result: discordResult });
       }
-      
-      // Console notification (always available)
       this.sendConsoleNotification(reportData);
       notifications.push({ type: 'console', success: true });
-      
     } catch (error) {
       console.error('Error sending notifications:', error);
       notifications.push({ type: 'error', success: false, error: error.message });
     }
-    
     return notifications;
   }
 
   async sendEmailNotification(reportData, reportPaths) {
-    const transporter = nodemailer.createTransporter(this.emailConfig);
-    
+    const transporter = nodemailer.createTransport(this.emailConfig);
+
     const { summary, environment } = reportData;
-    const successRate = summary.totalTests > 0 ? (summary.passedTests / summary.totalTests * 100).toFixed(2) : 0;
-    
+    const successRate = summary.totalTests > 0
+      ? (summary.passedTests / summary.totalTests * 100).toFixed(2)
+      : 0;
+
     const subject = `${summary.success ? '✅' : '❌'} Reporte de Pruebas - ${successRate}% éxito`;
-    
+
     const htmlContent = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 8px 8px 0 0;">
         <h1 style="margin: 0;">📊 Reporte de Pruebas</h1>
         <p style="margin: 10px 0 0 0; opacity: 0.9;">Generado el ${new Date(reportData.timestamp).toLocaleString('es-ES')}</p>
       </div>
-      
       <div style="padding: 20px; background: white; border: 1px solid #dee2e6;">
         <h2 style="color: ${summary.success ? '#28a745' : '#dc3545'};">
           ${summary.success ? '✅ Todas las pruebas pasaron' : '❌ Algunas pruebas fallaron'}
         </h2>
-        
         <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
           <tr style="background: #f8f9fa;">
             <td style="padding: 10px; border: 1px solid #dee2e6;"><strong>Total de Pruebas</strong></td>
@@ -102,7 +90,6 @@ class NotificationService {
             <td style="padding: 10px; border: 1px solid #dee2e6;">${(summary.totalTime / 1000).toFixed(2)}s</td>
           </tr>
         </table>
-        
         <h3>🔧 Información del Entorno</h3>
         <ul>
           <li><strong>Rama:</strong> ${environment.gitBranch}</li>
@@ -110,26 +97,19 @@ class NotificationService {
           <li><strong>Node.js:</strong> ${environment.nodeVersion}</li>
         </ul>
       </div>
-      
       <div style="background: #f8f9fa; padding: 15px; text-align: center; color: #6c757d; border-radius: 0 0 8px 8px;">
         <p style="margin: 0;">Reporte generado automáticamente por CI Simple Node Project</p>
       </div>
     </div>`;
-    
+
     const attachments = [];
     if (reportPaths.html && fs.existsSync(reportPaths.html)) {
-      attachments.push({
-        filename: 'test-report.html',
-        path: reportPaths.html
-      });
+      attachments.push({ filename: 'test-report.html', path: reportPaths.html });
     }
     if (reportPaths.json && fs.existsSync(reportPaths.json)) {
-      attachments.push({
-        filename: 'test-report.json',
-        path: reportPaths.json
-      });
+      attachments.push({ filename: 'test-report.json', path: reportPaths.json });
     }
-    
+
     const mailOptions = {
       from: this.emailConfig.auth.user,
       to: process.env.NOTIFICATION_EMAIL || this.emailConfig.auth.user,
@@ -137,7 +117,7 @@ class NotificationService {
       html: htmlContent,
       attachments
     };
-    
+
     const result = await transporter.sendMail(mailOptions);
     console.log('Email notification sent:', result.messageId);
     return result;
@@ -145,11 +125,13 @@ class NotificationService {
 
   async sendSlackNotification(reportData) {
     const { summary, environment } = reportData;
-    const successRate = summary.totalTests > 0 ? (summary.passedTests / summary.totalTests * 100).toFixed(2) : 0;
-    
+    const successRate = summary.totalTests > 0
+      ? (summary.passedTests / summary.totalTests * 100).toFixed(2)
+      : 0;
+
     const color = summary.success ? 'good' : 'danger';
     const emoji = summary.success ? ':white_check_mark:' : ':x:';
-    
+
     const payload = {
       username: 'Test Reporter',
       icon_emoji: ':test_tube:',
@@ -157,42 +139,18 @@ class NotificationService {
         color,
         title: `${emoji} Reporte de Pruebas - ${successRate}% éxito`,
         fields: [
-          {
-            title: 'Total de Pruebas',
-            value: summary.totalTests.toString(),
-            short: true
-          },
-          {
-            title: 'Exitosas',
-            value: summary.passedTests.toString(),
-            short: true
-          },
-          {
-            title: 'Fallidas',
-            value: summary.failedTests.toString(),
-            short: true
-          },
-          {
-            title: 'Tiempo Total',
-            value: `${(summary.totalTime / 1000).toFixed(2)}s`,
-            short: true
-          },
-          {
-            title: 'Rama',
-            value: environment.gitBranch,
-            short: true
-          },
-          {
-            title: 'Commit',
-            value: environment.gitCommit.substring(0, 8),
-            short: true
-          }
+          { title: 'Total de Pruebas', value: summary.totalTests.toString(), short: true },
+          { title: 'Exitosas', value: summary.passedTests.toString(), short: true },
+          { title: 'Fallidas', value: summary.failedTests.toString(), short: true },
+          { title: 'Tiempo Total', value: `${(summary.totalTime / 1000).toFixed(2)}s`, short: true },
+          { title: 'Rama', value: environment.gitBranch, short: true },
+          { title: 'Commit', value: environment.gitCommit.substring(0, 8), short: true }
         ],
         footer: 'CI Simple Node Project',
         ts: Math.floor(Date.now() / 1000)
       }]
     };
-    
+
     const response = await axios.post(this.slackWebhookUrl, payload);
     console.log('Slack notification sent');
     return response.data;
@@ -200,14 +158,16 @@ class NotificationService {
 
   async sendTeamsNotification(reportData) {
     const { summary, environment } = reportData;
-    const successRate = summary.totalTests > 0 ? (summary.passedTests / summary.totalTests * 100).toFixed(2) : 0;
-    
+    const successRate = summary.totalTests > 0
+      ? (summary.passedTests / summary.totalTests * 100).toFixed(2)
+      : 0;
+
     const themeColor = summary.success ? '28a745' : 'dc3545';
     const emoji = summary.success ? '✅' : '❌';
-    
+
     const payload = {
-      "@type": "MessageCard",
-      "@context": "https://schema.org/extensions",
+      '@type': 'MessageCard',
+      '@context': 'https://schema.org/extensions',
       summary: `Reporte de Pruebas - ${successRate}% éxito`,
       themeColor,
       sections: [{
@@ -224,7 +184,7 @@ class NotificationService {
         ]
       }]
     };
-    
+
     const response = await axios.post(this.teamsWebhookUrl, payload);
     console.log('Teams notification sent');
     return response.data;
@@ -232,11 +192,13 @@ class NotificationService {
 
   async sendDiscordNotification(reportData) {
     const { summary, environment } = reportData;
-    const successRate = summary.totalTests > 0 ? (summary.passedTests / summary.totalTests * 100).toFixed(2) : 0;
-    
+    const successRate = summary.totalTests > 0
+      ? (summary.passedTests / summary.totalTests * 100).toFixed(2)
+      : 0;
+
     const color = summary.success ? 0x28a745 : 0xdc3545;
     const emoji = summary.success ? '✅' : '❌';
-    
+
     const payload = {
       username: 'Test Reporter',
       avatar_url: 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f9ea.png',
@@ -256,7 +218,7 @@ class NotificationService {
         footer: { text: 'CI Simple Node Project' }
       }]
     };
-    
+
     const response = await axios.post(this.discordWebhookUrl, payload);
     console.log('Discord notification sent');
     return response.data;
@@ -264,8 +226,10 @@ class NotificationService {
 
   sendConsoleNotification(reportData) {
     const { summary, environment } = reportData;
-    const successRate = summary.totalTests > 0 ? (summary.passedTests / summary.totalTests * 100).toFixed(2) : 0;
-    
+    const successRate = summary.totalTests > 0
+      ? (summary.passedTests / summary.totalTests * 100).toFixed(2)
+      : 0;
+
     console.log('\n' + '='.repeat(60));
     console.log('📊 REPORTE DE PRUEBAS');
     console.log('='.repeat(60));
