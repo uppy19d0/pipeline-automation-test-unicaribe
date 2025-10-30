@@ -6,7 +6,6 @@ const path = require('path');
 describe('Reporting and Notification System', () => {
   let reportGenerator;
   let notificationService;
-  
   beforeEach(() => {
     reportGenerator = new ReportGenerator();
     notificationService = new NotificationService();
@@ -30,7 +29,6 @@ describe('Reporting and Notification System', () => {
       };
 
       const summary = reportGenerator.extractSummary(mockResults);
-      
       expect(summary.totalTests).toBe(10);
       expect(summary.passedTests).toBe(8);
       expect(summary.failedTests).toBe(2);
@@ -52,7 +50,6 @@ describe('Reporting and Notification System', () => {
       };
 
       const suites = reportGenerator.extractTestSuites(mockResults);
-      
       expect(suites).toHaveLength(1);
       expect(suites[0].name).toBe('test.js');
       expect(suites[0].status).toBe('passed');
@@ -61,7 +58,6 @@ describe('Reporting and Notification System', () => {
 
     test('should get environment information', () => {
       const envInfo = reportGenerator.getEnvironmentInfo();
-      
       expect(envInfo).toHaveProperty('nodeVersion');
       expect(envInfo).toHaveProperty('platform');
       expect(envInfo).toHaveProperty('arch');
@@ -106,7 +102,6 @@ describe('Reporting and Notification System', () => {
       };
 
       const html = reportGenerator.generateHTMLContent(mockReportData);
-      
       expect(html).toContain('<!DOCTYPE html>');
       expect(html).toContain('Reporte de Pruebas');
       expect(html).toContain('80.00%'); // Success rate
@@ -143,17 +138,14 @@ describe('Reporting and Notification System', () => {
 
       // Capture console output
       const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
-      
       notificationService.sendConsoleNotification(mockReportData);
-      
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('REPORTE DE PRUEBAS'));
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('✅ ÉXITO'));
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Total de Pruebas: 3'));
-      
       consoleSpy.mockRestore();
     });
 
-    test('should handle notifications when no services are configured', async () => {
+    test('should handle notifications when no services are configured', async() => {
       const mockReportData = {
         timestamp: new Date().toISOString(),
         summary: {
@@ -171,7 +163,6 @@ describe('Reporting and Notification System', () => {
       };
 
       const notifications = await notificationService.sendNotifications(mockReportData);
-      
       // Should at least have console notification
       expect(notifications).toEqual(
         expect.arrayContaining([
@@ -182,7 +173,7 @@ describe('Reporting and Notification System', () => {
   });
 
   describe('Integration', () => {
-    test('should generate complete report with mock data', async () => {
+    test('should generate complete report with mock data', async() => {
       const mockTestResults = {
         success: true,
         numTotalTests: 15,
@@ -202,7 +193,6 @@ describe('Reporting and Notification System', () => {
       };
 
       const reportData = await reportGenerator.generateTestReport(mockTestResults);
-      
       expect(reportData).toHaveProperty('timestamp');
       expect(reportData).toHaveProperty('summary');
       expect(reportData).toHaveProperty('testSuites');
