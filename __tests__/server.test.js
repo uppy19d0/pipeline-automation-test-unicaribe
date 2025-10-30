@@ -3,7 +3,7 @@ const app = require('../src/server');
 
 describe('Server API', () => {
   describe('Health and Info endpoints', () => {
-    test('GET /health should return health status', async () => {
+    test('GET /health should return health status', async() => {
       const response = await request(app).get('/health');
       expect(response.status).toBe(200);
       expect(response.body).toHaveProperty('status', 'OK');
@@ -11,14 +11,14 @@ describe('Server API', () => {
       expect(response.body).toHaveProperty('uptime');
     });
 
-    test('GET / should return API info', async () => {
+    test('GET / should return API info', async() => {
       const response = await request(app).get('/');
       expect(response.status).toBe(200);
       expect(response.body).toHaveProperty('message');
       expect(response.body).toHaveProperty('endpoints');
     });
 
-    test('GET /nonexistent should return 404', async () => {
+    test('GET /nonexistent should return 404', async() => {
       const response = await request(app).get('/nonexistent');
       expect(response.status).toBe(404);
       expect(response.body).toHaveProperty('error', 'Not Found');
@@ -26,35 +26,35 @@ describe('Server API', () => {
   });
 
   describe('Calculator endpoints', () => {
-    test('POST /api/calculator/add should add two numbers', async () => {
+    test('POST /api/calculator/add should add two numbers', async() => {
       const response = await request(app)
         .post('/api/calculator/add')
         .send({ a: 5, b: 3 });
-      
+
       expect(response.status).toBe(200);
       expect(response.body.result).toBe(8);
       expect(response.body.operation).toBe('addition');
     });
 
-    test('POST /api/calculator/add should handle invalid input', async () => {
+    test('POST /api/calculator/add should handle invalid input', async() => {
       const response = await request(app)
         .post('/api/calculator/add')
         .send({ a: 'invalid', b: 3 });
-      
+
       expect(response.status).toBe(400);
       expect(response.body).toHaveProperty('error');
     });
 
-    test('POST /api/calculator/divide should handle division by zero', async () => {
+    test('POST /api/calculator/divide should handle division by zero', async() => {
       const response = await request(app)
         .post('/api/calculator/divide')
         .send({ a: 5, b: 0 });
-      
+
       expect(response.status).toBe(400);
       expect(response.body.error).toContain('Division by zero');
     });
 
-    test('POST /api/calculator/factorial should calculate factorial', async () => {
+    test('POST /api/calculator/factorial should calculate factorial', async() => {
       const response = await request(app)
         .post('/api/calculator/factorial')
         .send({ n: 5 });
