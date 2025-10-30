@@ -1,0 +1,43 @@
+{
+  "name": "ci-simple-node-project",
+  "version": "1.0.0",
+  "description": "A comprehensive Node.js project with Express API, utilities, and CI/CD",
+  "main": "src/server.js",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "test": "jest --ci --coverage --reporters=default --reporters=jest-junit",
+    "test:watch": "jest --watch",
+    "lint": "eslint src/ __tests__/",
+    "lint:fix": "eslint src/ __tests__/ --fix",
+    "format": "prettier --write src/ __tests__/"
+  },
+  "keywords": ["nodejs", "express", "api", "calculator", "utilities", "ci-cd"],
+  "author": "Your Name",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "helmet": "^7.1.0",
+    "morgan": "^1.10.0",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "jest-junit": "^16.0.0",
+    "nodemon": "^3.0.1",
+    "eslint": "^8.52.0",
+    "prettier": "^3.0.3",
+    "supertest": "^6.3.3"
+  },
+  "jest-junit": {
+    "outputDirectory": "reports/junit",
+    "outputName": "junit.xml",
+    "ancestorSeparator": " \u203a ",
+    "suiteNameTemplate": "{filepath}",
+    "classNameTemplate": "{classname}",
+    "titleTemplate": "{title}"
+  }
+}
