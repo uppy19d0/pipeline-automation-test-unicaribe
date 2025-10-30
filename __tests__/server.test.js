@@ -58,56 +58,56 @@ describe('Server API', () => {
       const response = await request(app)
         .post('/api/calculator/factorial')
         .send({ n: 5 });
-      
+
       expect(response.status).toBe(200);
       expect(response.body.result).toBe(120);
     });
   });
 
   describe('Utils endpoints', () => {
-    test('POST /api/utils/array-sum should sum array', async () => {
+    test('POST /api/utils/array-sum should sum array', async() => {
       const response = await request(app)
         .post('/api/utils/array-sum')
         .send({ array: [1, 2, 3, 4] });
-      
+
       expect(response.status).toBe(200);
       expect(response.body.result).toBe(10);
     });
 
-    test('POST /api/utils/capitalize should capitalize string', async () => {
+    test('POST /api/utils/capitalize should capitalize string', async() => {
       const response = await request(app)
         .post('/api/utils/capitalize')
         .send({ text: 'hello world' });
-      
+
       expect(response.status).toBe(200);
       expect(response.body.result).toBe('Hello world');
     });
 
-    test('POST /api/utils/is-palindrome should check palindrome', async () => {
+    test('POST /api/utils/is-palindrome should check palindrome', async() => {
       const response = await request(app)
         .post('/api/utils/is-palindrome')
         .send({ text: 'racecar' });
-      
+
       expect(response.status).toBe(200);
       expect(response.body.result).toBe(true);
     });
 
-    test('POST /api/utils/is-prime should check prime number', async () => {
+    test('POST /api/utils/is-prime should check prime number', async() => {
       const response = await request(app)
         .post('/api/utils/is-prime')
         .send({ number: 17 });
-      
+
       expect(response.status).toBe(200);
       expect(response.body.result).toBe(true);
     });
   });
 
   describe('Legacy endpoint', () => {
-    test('POST /api/sum should work for backward compatibility', async () => {
+    test('POST /api/sum should work for backward compatibility', async() => {
       const response = await request(app)
         .post('/api/sum')
         .send({ a: 2, b: 3 });
-      
+
       expect(response.status).toBe(200);
       expect(response.body.result).toBe(5);
       expect(response.body.operation).toBe('legacy_sum');

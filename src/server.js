@@ -18,7 +18,7 @@ app.use(morgan('combined'));
 app.use(express.json());
 
 // Error handling middleware
-const errorHandler = (err, req, res, next) => {
+const errorHandler = (err, req, res, _next) => {
   console.error(err.stack);
   res.status(500).json({
     error: 'Internal Server Error',
