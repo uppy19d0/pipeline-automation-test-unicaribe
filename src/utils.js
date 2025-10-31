@@ -55,7 +55,6 @@ const utils = {
     return cleaned === cleaned.split('').reverse().join('');
   },
 
-  // Number utilities
   isPrime(num) {
     if (typeof num !== 'number' || !Number.isInteger(num)) {
       throw new Error('Input must be an integer');
