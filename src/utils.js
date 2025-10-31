@@ -1,5 +1,4 @@
 const utils = {
-  // Array utilities
   arraySum(arr) {
     if (!Array.isArray(arr)) {
       throw new Error('Input must be an array');
