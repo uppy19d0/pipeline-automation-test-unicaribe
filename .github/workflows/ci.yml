@@ -50,7 +50,6 @@ jobs:
           fi
           exit 0
 
-
   test:
     runs-on: ubuntu-latest
     needs: lint-and-format
@@ -70,18 +69,37 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Asegura carpeta para el XML de JUnit
+      - name: Prepare JUnit folder
+        run: mkdir -p reports/junit
+
+      # Exporta variables para jest-junit
       - name: Configure JUnit output path
-        run: echo "JEST_JUNIT_OUTPUT=reports/junit/junit.xml" >> $GITHUB_ENV
+        run: |
+          echo "JEST_JUNIT_OUTPUT=reports/junit/junit.xml" >> $GITHUB_ENV
+          echo "JEST_JUNIT_ADD_FILE_ATTRIBUTE=true" >> $GITHUB_ENV
 
       - name: Run tests with coverage + JUnit
         run: npm test
+
+      # Paso de depuración si no aparece el XML
+      - name: Debug - list reports
+        if: always()
+        run: |
+          echo "Listing reports dir (if any):"
+          ls -la reports || true
+          echo "Searching for junit*.xml:"
+          find . -type f -name "junit*.xml" -maxdepth 5 || true
 
       - name: Publish test results (JUnit) to Checks
         if: always()
         uses: dorny/test-reporter@v1
         with:
           name: Unit Tests (Jest) - Node ${{ matrix.node-version }}
-          path: reports/junit/junit.xml
+          # Globs tolerantes por si cambia la ruta
+          path: |
+            reports/**/junit*.xml
+            **/junit*.xml
           reporter: jest-junit
           fail-on-error: false
 
