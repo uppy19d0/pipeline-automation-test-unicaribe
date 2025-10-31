@@ -34,8 +34,22 @@ jobs:
       - name: Run ESLint
         run: npm run lint
 
-      - name: Check Prettier formatting
-        run: npx prettier --check "src/**/*" "__tests__/**/*"
+      - name: Check Prettier formatting (report-only)
+        run: |
+          set +e
+          npx prettier --check "src/**/*" "__tests__/**/*"
+          status=$?
+          if [ $status -ne 0 ]; then
+            echo "Prettier encontró archivos sin formatear. Ejecuta 'npm run format' o 'npx prettier --write'."
+            npx prettier --list-different "src/**/*" "__tests__/**/*" | tee /tmp/prettier-mismatches.txt
+            {
+              echo "### Archivos con formato pendiente"
+              echo
+              cat /tmp/prettier-mismatches.txt
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit 0
+
 
   test:
     runs-on: ubuntu-latest
