@@ -11,10 +11,6 @@ permissions:
   checks: write
   pull-requests: write
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   lint-and-format:
     runs-on: ubuntu-latest
@@ -34,10 +30,8 @@ jobs:
       - name: Run ESLint
         run: npm run lint
 
-      # Usamos Prettier en modo check (sin usar tu script --write)
       - name: Check Prettier formatting
-        run: |
-          npx prettier --check "src/**/*" "__tests__/**/*"
+        run: npm run format -- --check
 
   test:
     runs-on: ubuntu-latest
@@ -58,9 +52,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Configure JUnit output path
-        run: |
-          echo "JEST_JUNIT_OUTPUT=reports/junit/junit.xml" >> $GITHUB_ENV
+      # Si usas env en vez de config en package.json, descomenta:
+      # - name: Configure JUnit env
+      #   run: echo "JEST_JUNIT_OUTPUT=reports/junit/junit.xml" >> $GITHUB_ENV
 
       - name: Run tests with coverage + JUnit
         run: npm test
@@ -69,7 +63,7 @@ jobs:
         if: always()
         uses: dorny/test-reporter@v1
         with:
-          name: Unit Tests (Jest) — Node ${{ matrix.node-version }}
+          name: Unit Tests (Jest)
           path: reports/junit/junit.xml
           reporter: jest-junit
           fail-on-error: false
@@ -101,14 +95,13 @@ jobs:
         with:
           context: .
           tags: ci-simple-node-project:latest
-          load: true
+          load: true                # <<<<<< CLAVE: carga la imagen al daemon local
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Run container smoke test
-        timeout-minutes: 5
         run: |
-          set -euo pipefail
+          set -e
           docker run -d --name test-container -p 3000:3000 ci-simple-node-project:latest
           # espera a que arranque
           for i in {1..30}; do
@@ -123,13 +116,13 @@ jobs:
               exit 1
             fi
           done
-          docker stop test-container >/dev/null
-          docker rm test-container >/dev/null
+          docker stop test-container
+          docker rm test-container
 
-  notify-email:
+    notify-email:
     runs-on: ubuntu-latest
     needs: [lint-and-format, test, docker-build]
-    if: always()
+    if: always() # el job corre siempre, pero los pasos de email se condicionan a tener secretos
     steps:
       - name: Download test artifacts
         uses: actions/download-artifact@v4
@@ -137,29 +130,12 @@ jobs:
           pattern: test-artifacts-node-*
           merge-multiple: true
 
-      # Email si FALLA
+      # Envío si FALLA (solo si hay secretos y si es push)
       - name: Send email on failure
-        if: failure()
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: ${{ secrets.SMTP_SERVER }}     # ej: smtp.gmail.com
-          server_port: ${{ secrets.SMTP_PORT }}          # 465 (TLS) o 587
-          secure: true                                   # true si 465; false si 587
-          username: ${{ secrets.SMTP_USERNAME }}         # ej: usuario@gmail.com
-          password: ${{ secrets.SMTP_PASSWORD }}         # App Password (colocado en Secrets)
-          from: "CI Bot <${{ secrets.SMTP_USERNAME }}>"  # suele requerir que coincida
-          to: ${{ secrets.SMTP_TO }}                     # "a@correo.com, b@correo.com"
-          subject: "❌ CI falló — ${{ github.repository }} #${{ github.run_number }}"
-          html_body: |
-            <p>El pipeline <b>falló</b> para <code>${{ github.ref_name }}</code> en <code>${{ github.repository }}</code>.</p>
-            <p><a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">Ver ejecución</a></p>
-          attachments: |
-            reports/junit/junit.xml
-            coverage/lcov.info
-
-      # Email si OK
-      - name: Send email on success
-        if: success()
+        if: failure() && github.event_name == 'push' &&
+            secrets.SMTP_SERVER != '' && secrets.SMTP_PORT != '' &&
+            secrets.SMTP_USERNAME != '' && secrets.SMTP_PASSWORD != '' &&
+            secrets.SMTP_TO != '' && secrets.SMTP_FROM != ''
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: ${{ secrets.SMTP_SERVER }}
@@ -167,9 +143,33 @@ jobs:
           secure: true
           username: ${{ secrets.SMTP_USERNAME }}
           password: ${{ secrets.SMTP_PASSWORD }}
-          from: "CI Bot <${{ secrets.SMTP_USERNAME }}>"
+          subject: "❌ CI falló — ${{ github.repository }} #${{ github.run_number }}"
+          from: "CI Bot <${{ secrets.SMTP_FROM }}>"
           to: ${{ secrets.SMTP_TO }}
+          html_body: |
+            <p>El pipeline <b>falló</b> para <code>${{ github.ref_name }}</code> en <code>${{ github.repository }}</code>.</p>
+            <p><a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">Ver ejecución</a></p>
+          attachments: |
+            reports/junit/junit.xml
+            coverage/lcov.info
+          nodemailerdebug: true
+
+      # Envío si OK (solo si hay secretos y si es push)
+      - name: Send email on success
+        if: success() && github.event_name == 'push' &&
+            secrets.SMTP_SERVER != '' && secrets.SMTP_PORT != '' &&
+            secrets.SMTP_USERNAME != '' && secrets.SMTP_PASSWORD != '' &&
+            secrets.SMTP_TO != '' && secrets.SMTP_FROM != ''
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.SMTP_SERVER }}
+          server_port: ${{ secrets.SMTP_PORT }}
+          secure: true
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
           subject: "✅ CI OK — ${{ github.repository }} #${{ github.run_number }}"
+          from: "CI Bot <${{ secrets.SMTP_FROM }}>"
+          to: ${{ secrets.SMTP_TO }}
           html_body: |
             <p>El pipeline <b>pasó</b> para <code>${{ github.ref_name }}</code> en <code>${{ github.repository }}</code>.</p>
             <ul>
@@ -180,3 +180,4 @@ jobs:
           attachments: |
             reports/junit/junit.xml
             coverage/lcov.info
+          nodemailerdebug: true
