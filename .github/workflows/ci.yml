@@ -1,6 +1,6 @@
 name: CI/CD - Comprehensive Pipeline
 
-on: 
+on:
   push:
     branches: [ main, develop ]
   pull_request:
@@ -52,6 +52,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Si usas env en vez de config en package.json, descomenta:
+      # - name: Configure JUnit env
+      #   run: echo "JEST_JUNIT_OUTPUT=reports/junit/junit.xml" >> $GITHUB_ENV
+
       - name: Run tests with coverage + JUnit
         run: npm test
 
@@ -72,7 +76,6 @@ jobs:
           path: |
             reports/**
             coverage/**
-            junit*.xml
           if-no-files-found: warn
           retention-days: 7
 
@@ -87,18 +90,89 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build Docker image
+      - name: Build (and load) Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
-          push: false
           tags: ci-simple-node-project:latest
+          load: true                # <<<<<< CLAVE: carga la imagen al daemon local
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Test Docker image
+      - name: Run container smoke test
         run: |
+          set -e
           docker run -d --name test-container -p 3000:3000 ci-simple-node-project:latest
-          sleep 10
-          curl -f http://localhost:3000/health || exit 1
+          # espera a que arranque
+          for i in {1..30}; do
+            if curl -fsS http://localhost:3000/health > /dev/null; then
+              echo "Health OK"
+              break
+            fi
+            sleep 1
+            if [ $i -eq 30 ]; then
+              echo "Healthcheck failed, dumping logs..."
+              docker logs test-container || true
+              exit 1
+            fi
+          done
           docker stop test-container
+          docker rm test-container
+
+  notify-email:
+    runs-on: ubuntu-latest
+    needs: [lint-and-format, test, docker-build]
+    if: always() # ejecuta siempre para avisar
+    steps:
+      # Descarga artefactos (de ambas versiones de Node)
+      - name: Download test artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: test-artifacts-node-*
+          merge-multiple: true
+
+      # Email si FALLA
+      - name: Send email on failure
+        if: failure()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.SMTP_SERVER }}
+          server_port: ${{ secrets.SMTP_PORT }}
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: "❌ CI falló — ${{ github.repository }} #${{ github.run_number }}"
+          to: ${{ secrets.SMTP_TO }}
+          from: "CI Bot <${{ secrets.SMTP_FROM }}"
+          secure: true
+          content_type: text/html
+          body: |
+            <p>El pipeline <b>falló</b> para <code>${{ github.ref_name }}</code> en <code>${{ github.repository }}</code>.</p>
+            <p><a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">Ver ejecución</a></p>
+          attachments: |
+            reports/junit/junit.xml
+            coverage/lcov.info
+
+      # Email si OK
+      - name: Send email on success
+        if: success()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.SMTP_SERVER }}
+          server_port: ${{ secrets.SMTP_PORT }}
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: "✅ CI OK — ${{ github.repository }} #${{ github.run_number }}"
+          to: ${{ secrets.SMTP_TO }}
+          from: "CI Bot <${{ secrets.SMTP_FROM }}"
+          secure: true
+          content_type: text/html
+          body: |
+            <p>El pipeline <b>pasó</b> para <code>${{ github.ref_name }}</code> en <code>${{ github.repository }}</code>.</p>
+            <ul>
+              <li>Checks de pruebas publicados en la pestaña <i>Checks</i>.</li>
+              <li>Artefactos: reportes y coverage adjuntos.</li>
+            </ul>
+            <p><a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">Ver ejecución</a></p>
+          attachments: |
+            reports/junit/junit.xml
+            coverage/lcov.info
