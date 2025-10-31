@@ -11,6 +11,10 @@ permissions:
   checks: write
   pull-requests: write
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   lint-and-format:
     runs-on: ubuntu-latest
@@ -30,8 +34,10 @@ jobs:
       - name: Run ESLint
         run: npm run lint
 
+      # Usamos Prettier en modo check (sin usar tu script --write)
       - name: Check Prettier formatting
-        run: npm run format -- --check
+        run: |
+          npx prettier --check "src/**/*" "__tests__/**/*"
 
   test:
     runs-on: ubuntu-latest
@@ -52,9 +58,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # Si usas env en vez de config en package.json, descomenta:
-      # - name: Configure JUnit env
-      #   run: echo "JEST_JUNIT_OUTPUT=reports/junit/junit.xml" >> $GITHUB_ENV
+      - name: Configure JUnit output path
+        run: |
+          echo "JEST_JUNIT_OUTPUT=reports/junit/junit.xml" >> $GITHUB_ENV
 
       - name: Run tests with coverage + JUnit
         run: npm test
@@ -63,7 +69,7 @@ jobs:
         if: always()
         uses: dorny/test-reporter@v1
         with:
-          name: Unit Tests (Jest)
+          name: Unit Tests (Jest) — Node ${{ matrix.node-version }}
           path: reports/junit/junit.xml
           reporter: jest-junit
           fail-on-error: false
@@ -95,13 +101,14 @@ jobs:
         with:
           context: .
           tags: ci-simple-node-project:latest
-          load: true                # <<<<<< CLAVE: carga la imagen al daemon local
+          load: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Run container smoke test
+        timeout-minutes: 5
         run: |
-          set -e
+          set -euo pipefail
           docker run -d --name test-container -p 3000:3000 ci-simple-node-project:latest
           # espera a que arranque
           for i in {1..30}; do
@@ -116,15 +123,14 @@ jobs:
               exit 1
             fi
           done
-          docker stop test-container
-          docker rm test-container
+          docker stop test-container >/dev/null
+          docker rm test-container >/dev/null
 
   notify-email:
     runs-on: ubuntu-latest
     needs: [lint-and-format, test, docker-build]
-    if: always() # ejecuta siempre para avisar
+    if: always()
     steps:
-      # Descarga artefactos (de ambas versiones de Node)
       - name: Download test artifacts
         uses: actions/download-artifact@v4
         with:
@@ -136,16 +142,15 @@ jobs:
         if: failure()
         uses: dawidd6/action-send-mail@v3
         with:
-          server_address: ${{ secrets.SMTP_SERVER }}
-          server_port: ${{ secrets.SMTP_PORT }}
-          username: ${{ secrets.SMTP_USERNAME }}
-          password: ${{ secrets.SMTP_PASSWORD }}
+          server_address: ${{ secrets.SMTP_SERVER }}     # ej: smtp.gmail.com
+          server_port: ${{ secrets.SMTP_PORT }}          # 465 (TLS) o 587
+          secure: true                                   # true si 465; false si 587
+          username: ${{ secrets.SMTP_USERNAME }}         # ej: usuario@gmail.com
+          password: ${{ secrets.SMTP_PASSWORD }}         # App Password (colocado en Secrets)
+          from: "CI Bot <${{ secrets.SMTP_USERNAME }}>"  # suele requerir que coincida
+          to: ${{ secrets.SMTP_TO }}                     # "a@correo.com, b@correo.com"
           subject: "❌ CI falló — ${{ github.repository }} #${{ github.run_number }}"
-          to: ${{ secrets.SMTP_TO }}
-          from: "CI Bot <${{ secrets.SMTP_FROM }}"
-          secure: true
-          content_type: text/html
-          body: |
+          html_body: |
             <p>El pipeline <b>falló</b> para <code>${{ github.ref_name }}</code> en <code>${{ github.repository }}</code>.</p>
             <p><a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">Ver ejecución</a></p>
           attachments: |
@@ -159,14 +164,13 @@ jobs:
         with:
           server_address: ${{ secrets.SMTP_SERVER }}
           server_port: ${{ secrets.SMTP_PORT }}
+          secure: true
           username: ${{ secrets.SMTP_USERNAME }}
           password: ${{ secrets.SMTP_PASSWORD }}
-          subject: "✅ CI OK — ${{ github.repository }} #${{ github.run_number }}"
+          from: "CI Bot <${{ secrets.SMTP_USERNAME }}>"
           to: ${{ secrets.SMTP_TO }}
-          from: "CI Bot <${{ secrets.SMTP_FROM }}"
-          secure: true
-          content_type: text/html
-          body: |
+          subject: "✅ CI OK — ${{ github.repository }} #${{ github.run_number }}"
+          html_body: |
             <p>El pipeline <b>pasó</b> para <code>${{ github.ref_name }}</code> en <code>${{ github.repository }}</code>.</p>
             <ul>
               <li>Checks de pruebas publicados en la pestaña <i>Checks</i>.</li>
