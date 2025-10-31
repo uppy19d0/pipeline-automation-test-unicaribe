@@ -11,7 +11,7 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "test": "jest --ci --coverage",
+    "test": "jest --ci --coverage --reporters=default --reporters=jest-junit",
     "test:watch": "jest --watch",
     "lint": "eslint src __tests__",
     "lint:fix": "eslint src __tests__ --fix",
